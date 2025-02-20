@@ -59,7 +59,7 @@ def handle_request():
         query= f"query: {message}, url:{url}",
         temperature=0.0,
         lastk=0,
-        session_id='GenericSession'
+        session_id=user
     )
 
     response_text = response['response']
