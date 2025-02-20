@@ -1,5 +1,6 @@
 # Web Server
-This folder contains an example of a web application (app.py) using Flask and LLMProxy, a simple script(test_query) to test the deployment, and additional files (requirements.txt, Procfile) required for a Koyeb deployment.
+This is adjusted from the provided code:
+(This folder contains an example of a web application (app.py) using Flask and LLMProxy, a simple script(test_query) to test the deployment, and additional files (requirements.txt, Procfile) required for a Koyeb deployment.)
 
 ## Getting Started
 ### Creating Koyeb Deployment
