@@ -58,7 +58,7 @@ def handle_request():
         If the question is unrelated to Somerville, do not provide the url',
         query= f"query: {message}, url:{url}",
         temperature=0.0,
-        lastk=0,
+        lastk=5,
         session_id='GenericSession'
     )
 
