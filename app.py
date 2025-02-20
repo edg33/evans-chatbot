@@ -54,7 +54,8 @@ def handle_request():
         on the municipal website politely remind them that you cannot answer \
         such questions. If you have the information to answer the query, \
         provide it. If there is a URL in the query, provide it after your \
-        answer so the user can learn more on the website.',
+        answer so the user can learn more on the website.\
+        If the question is unrelated to Somerville, do not provide the url',
         query= f"query: {message}, url:{url}",
         temperature=0.0,
         lastk=0,
