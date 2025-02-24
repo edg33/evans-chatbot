@@ -44,6 +44,8 @@ def handle_request():
     url = google_search(message)
 
     # Generate a response using LLMProxy
+    # Adjust this so that it uses multiple responses.
+    # Use the web pages
     response = generate(
         model='4o-mini',
         system='You are an assistant to help individuals navigate their \
@@ -55,10 +57,12 @@ def handle_request():
         such questions. If you have the information to answer the query, \
         provide it. If there is a URL in the query, provide it after your \
         answer so the user can learn more on the website.\
-        If the question is unrelated to Somerville, do not provide the url',
+        If the question is unrelated to Somerville, do not provide the url.\
+        Do not make reference to the fact that the user provides the URL.\
+        Feel free to ask follow up questions to give a better response.',
         query= f"query: {message}, url:{url}",
         temperature=0.0,
-        lastk=0,
+        lastk=5,
         session_id=user
     )
 
