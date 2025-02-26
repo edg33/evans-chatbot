@@ -89,7 +89,7 @@ def handle_request():
         system='You are to clean up a different response. Only change the link \
         if a link is provided in the response. Do not say anything aside from \
         cleaning the response.',
-        query= f"If there is a link provided in the response: ({response}), \
+        query= f"If there is a link provided in the response: ({response_text}), \
         replace it with the following url: {url}",
         temperature=0.0,
         lastk=0,
