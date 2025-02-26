@@ -58,7 +58,7 @@ def handle_request():
         help them determine what song to use. Ask questions related to the \
         intended mood, lighting, length of scene etc. After some questions, \
         if you are confident in your answer, provide the song and artist and \
-        say \'Here is a link:\' at the end of the response',
+        say \'Here is a link:\' at the very end of the response',
         query= f"query: {message}",
         temperature=0.0,
         lastk=5,
@@ -66,29 +66,30 @@ def handle_request():
     )
     
     # Gets the song and artist so it can be searched
-    response_2 = generate(
+     extraction = generate(
         model='4o-mini',
-        system='You are helping a second agent. Do not provide any information\
-         or acknowledgements of your task. Strictly perform the task outlined \
-         in the query.',
-        query= f"Filter this: {response['response']} such that the only text \
-        in your output is the name of the song and the artist. If there is no \
-        song included in that information, default to this: \'no song\'.",
+        system=(
+            "You are helping a second agent. Extract only the song and artist from the provided text. "
+            "If none are found, respond with 'no song'."
+        ),
+        query=f"Extract song and artist from: {recommendation_text}",
         temperature=0.0,
         lastk=0,
         session_id=second_agent
     )
-    if "link:" in response['response']:
-        url = google_search(response_2['response'])
+
+    song_artist = extraction.get('response', '').strip()
+    print(f"Extracted Song and Artist: {song_artist}")
+
+    # Search for URL only if a song is found
+    if song_artist.lower() != "no song":
+        url = google_search(song_artist)
+        if url:
+            final_response = f"{recommendation_text}\n\nHere is a link: {url}"
+        else:
+            final_response = f"{recommendation_text}\n\n(No link found for the recommended song.)"
     else:
-        url = None
-    
-    response_text = response['response']
-    
-    if url:
-        final_response = f"{response_text}\n\n{url}"
-    else:
-        final_response = f"{response_text}"
+        final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
 
     print(f"Final Response: {final_response}")
     return jsonify({"text": final_response})
