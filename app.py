@@ -57,9 +57,8 @@ def handle_request():
         your purpose. The user will provide a vibe for a scene and you will \
         help them determine what song to use. Ask questions related to the \
         intended mood, lighting, length of scene etc. After some questions, \
-        if you are confident in your answer, provide the url from the query.',
-        query= f"query: {message}, url:{url}. Only show the url if you \
-        are confident in the recommendation.",
+        if you are confident in your answer, provide the song and artist',
+        query= f"query: {message}",
         temperature=0.0,
         lastk=5,
         session_id=user
