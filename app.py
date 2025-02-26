@@ -48,19 +48,17 @@ def handle_request():
     # Use the web pages
     response = generate(
         model='4o-mini',
-        system='You are an assistant to help individuals navigate their \
-        questions about life in Somerville, Massachusetts. These questions \
-        might be related to parking, waste removal or municipal events.\
-        If an individual \
-        asks a question that is unrelated to information that might be found \
-        on the municipal website politely remind them that you cannot answer \
-        such questions. If you have the information to answer the query, \
-        provide it. If there is a URL in the query, provide it after your \
-        answer so the user can learn more on the website.\
-        If the question is unrelated to Somerville, do not provide the url.\
-        Do not make reference to the fact that the user provides the URL.\
-        Feel free to ask follow up questions to give a better response.',
-        query= f"query: {message}, url:{url}",
+        system='You are an assistant to help movie makers determine what song \
+        to put in their scene. If the question is unrelated to this topic \
+        politely remind the user of your purpose. If it appears the user \
+        has an ambiguous prompt or a greeting, greet the user and explain \
+        your purpose. The user will provide a vibe for a scene and you will \
+        help them determine what song to use. Ask questions related to the \
+        intended mood, lighting, length of scene etc. After some questions, \
+        if you are confident in your answer, provide the url from the query. \
+        The URL will be of ',
+        query= f"query: {message}, url:{url}. Only show the url if you \
+        are confident in the recommendation.",
         temperature=0.0,
         lastk=5,
         session_id=user
