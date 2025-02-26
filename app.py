@@ -73,34 +73,32 @@ def handle_request():
          in the query.',
         query= f"Filter this: {response['response']} such that the only text \
         in your output is the name of the song and the artist. If there is no \
-        song included in that information, default to Never Gonna Give You Up \
-        by Rick Astley.",
+        song included in that information, default to this: \'no song\'.",
         temperature=0.0,
         lastk=0,
         session_id=second_agent
     )
-    url = google_search(response_2['response'])
+    url=None
+    if "no song" in response_2['response']:
+        url = google_search(response_2['response'])
     
     response_text = response['response']
     
-    # Replaces the link with a working one
-    response_3 = generate(
-        model='4o-mini',
-        system='You are to clean up a different response. Only change the link \
-        if a link is provided in the response. Do not say anything aside from \
-        cleaning the response.',
-        query= f"If there is a link provided in the response: ({response_text}), \
-        replace it with the following url: {url}",
-        temperature=0.0,
-        lastk=0,
-        session_id=third_agent
-    )
-    response_text_3 = response_3['response']
-    
-    # Send response back
-    print(response_text_3)
+    if url:
+        final_response = f"{response_text}\n\nListen here: {url}"
+    else:
+        final_response = f"{response_text}"
 
-    return jsonify({"text": response_text_3})
+    print(f"Final Response: {final_response}")
+    return jsonify({"text": final_response})
+
+
+    
+    
+    # # Send response back
+    # print(response_text_3)
+    # 
+    # return jsonify({"text": response_text_3})
     
 @app.errorhandler(404)
 def page_not_found(e):
