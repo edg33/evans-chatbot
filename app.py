@@ -57,7 +57,8 @@ def handle_request():
         your purpose. The user will provide a vibe for a scene and you will \
         help them determine what song to use. Ask questions related to the \
         intended mood, lighting, length of scene etc. After some questions, \
-        if you are confident in your answer, provide the song and artist',
+        if you are confident in your answer, provide the song and artist and \
+        say \'Here is a link:\' at the end of the response',
         query= f"query: {message}",
         temperature=0.0,
         lastk=5,
@@ -77,15 +78,15 @@ def handle_request():
         lastk=0,
         session_id=second_agent
     )
-    if "no song" in response_2['response']:
-        url=None
-    else:
+    if "link:" in response['response']:
         url = google_search(response_2['response'])
+    else:
+        url = None
     
     response_text = response['response']
     
     if url:
-        final_response = f"{response_text}\n\nListen here: {url}"
+        final_response = f"{response_text}\n\n{url}"
     else:
         final_response = f"{response_text}"
 
