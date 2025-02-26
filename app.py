@@ -71,7 +71,7 @@ def handle_request():
         system='You are helping a second agent. Do not provide any information\
          or acknowledgements of your task. Strictly perform the task outlined \
          in the query.',
-        query= f"strip this: {response['response']} such that the only text \
+        query= f"Filter this: {response['response']} such that the only text \
         in your output is the name of the song and the artist. If there is no \
         song included in that information, default to Never Gonna Give You Up \
         by Rick Astley.",
