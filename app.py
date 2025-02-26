@@ -31,6 +31,8 @@ def handle_request():
 
     # Extract relevant information
     user = data.get("user_name", "Unknown")
+    second_agent = user + "_2"
+    third_agent = user+ "_3"
     message = data.get("text", "")
 
     print(data)
@@ -55,21 +57,50 @@ def handle_request():
         your purpose. The user will provide a vibe for a scene and you will \
         help them determine what song to use. Ask questions related to the \
         intended mood, lighting, length of scene etc. After some questions, \
-        if you are confident in your answer, provide the url from the query. \
-        The URL will be of ',
+        if you are confident in your answer, provide the url from the query.',
         query= f"query: {message}, url:{url}. Only show the url if you \
         are confident in the recommendation.",
         temperature=0.0,
         lastk=5,
         session_id=user
     )
-
+    
+    # Gets the song and artist so it can be searched
+    response_2 = generate(
+        model='4o-mini',
+        system='You are helping a second agent. Do not provide any information\
+         or acknowledgements of your task. Strictly perform the task outlined \
+         in the query.',
+        query= f"strip this: {response['response']} such that the only text \
+        in your output is the name of the song and the artist. If there is no \
+        song included in that information, default to Never Gonna Give You Up \
+        by Rick Astley.",
+        temperature=0.0,
+        lastk=0,
+        session_id=second_agent
+    )
+    url = google_search(response_2['response'])
+    
     response_text = response['response']
     
+    # Replaces the link with a working one
+    response_3 = generate(
+        model='4o-mini',
+        system='You are to clean up a different response. Only change the link \
+        if a link is provided in the response. Do not say anything aside from \
+        cleaning the response.',
+        query= f"If there is a link provided in the response: ({response}), \
+        replace it with the following url: {url}",
+        temperature=0.0,
+        lastk=0,
+        session_id=third_agent
+    )
+    response_text_3 = response_3['response']
+    
     # Send response back
-    print(response_text)
+    print(response_text_3)
 
-    return jsonify({"text": response_text})
+    return jsonify({"text": response_text_3})
     
 @app.errorhandler(404)
 def page_not_found(e):
