@@ -77,8 +77,9 @@ def handle_request():
         lastk=0,
         session_id=second_agent
     )
-    url=None
     if "no song" in response_2['response']:
+        url=None
+    else:
         url = google_search(response_2['response'])
     
     response_text = response['response']
