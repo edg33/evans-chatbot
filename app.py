@@ -24,6 +24,8 @@ def google_search(query):
             return search_results[0]["link"]  # Return only the first result
     print(f"Error: {response.status_code}, {response.text}")
     return None
+    
+
 
 @app.route('/', methods=['POST'])
 def handle_request():
@@ -43,7 +45,7 @@ def handle_request():
 
     print(f"Message from {user} : {message}")
     
-    url = google_search(message)
+    #url = google_search(message)
 
     # Generate a response using LLMProxy
     # Adjust this so that it uses multiple responses.
@@ -65,8 +67,10 @@ def handle_request():
         session_id=user
     )
     
+    recommendation_text = response["response"]
+    
     # Gets the song and artist so it can be searched
-     extraction = generate(
+    extraction = generate(
         model='4o-mini',
         system=(
             "You are helping a second agent. Extract only the song and artist from the provided text. "
@@ -78,11 +82,10 @@ def handle_request():
         session_id=second_agent
     )
 
-    song_artist = extraction.get('response', '').strip()
+    song_artist = extraction['response']
     print(f"Extracted Song and Artist: {song_artist}")
-
     # Search for URL only if a song is found
-    if song_artist.lower() != "no song":
+    if "no song" in song_artist.lower():
         url = google_search(song_artist)
         if url:
             final_response = f"{recommendation_text}\n\nHere is a link: {url}"
