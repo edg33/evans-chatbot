@@ -84,19 +84,35 @@ def handle_request():
         session_id=second_agent
     )
 
-    song_artist = extraction['response']
+    song_artists = extraction['response']
+    song_artists = song_artists.split("///")
+    
+    # Boolean to keep track of things
+    is_first = True
+    
     print(f"Extracted Song and Artist: {song_artist}")
     # Search for URL only if a song is found
     if "no song" in song_artist.lower():
         final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
     else:
-        url = google_search(song_artist)
-        if url:
-            final_response = f"{recommendation_text}\n\nHere is a link: {url}"
-        else:
-            final_response = f"{recommendation_text}\n\n(No link found for the recommended song.)"
+        # Search for each song
+        for song_artist in song_artists:
+            # If first start the chain
+            if is_first:
+                url = google_search(song_artist)
+                if url:
+                    final_response = f"{recommendation_text}\n\n{song_artist}: {url}"
+                else:
+                    final_response = f"{recommendation_text}\n\n{song_artist}:(No link)"
+                is_first = False 
+            else:
+                url = google_search(song_artist)
+                if url:
+                    final_response += f"\n\n{song_artist}: {url}"
+                else:
+                    final_response += f"\n\n{song_artist}:(No link)"
     
-    final_response += final_response + f"\n\n {extraction["response"]}"
+    final_response = final_response + f"\n\n {extraction["response"]}"
 
     print(f"Final Response: {final_response}")
     return jsonify({"text": final_response})
