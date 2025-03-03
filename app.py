@@ -94,7 +94,7 @@ def handle_request():
         else:
             final_response = f"{recommendation_text}\n\n(No link found for the recommended song.)"
     
-    final_response += recommendation_text + f"\n\n {extraction["response"]}"
+    final_response += final_response + f"\n\n {extraction["response"]}"
 
     print(f"Final Response: {final_response}")
     return jsonify({"text": final_response})
