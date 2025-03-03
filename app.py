@@ -26,7 +26,6 @@ def google_search(query):
     return None
     
 
-
 @app.route('/', methods=['POST'])
 def handle_request():
     data = request.get_json() 
@@ -86,13 +85,13 @@ def handle_request():
     print(f"Extracted Song and Artist: {song_artist}")
     # Search for URL only if a song is found
     if "no song" in song_artist.lower():
+        final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
+    else:
         url = google_search(song_artist)
         if url:
             final_response = f"{recommendation_text}\n\nHere is a link: {url}"
         else:
             final_response = f"{recommendation_text}\n\n(No link found for the recommended song.)"
-    else:
-        final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
 
     print(f"Final Response: {final_response}")
     return jsonify({"text": final_response})
