@@ -71,10 +71,12 @@ def handle_request():
     extraction = generate(
         model='4o-mini',
         system=(
-            "You are helping a second agent. Extract only the song and artist from the provided text. "
-            "If none are found, respond with 'no song'."
+            "You are helping a second agent. Extract only the song and artist from the provided text. \
+             Remove everything that is not the key song and artist. \
+             If none are found, respond with 'no song'."
         ),
-        query=f"Extract song and artist from: {recommendation_text}",
+        query=f"Extract song and artist from: {recommendation_text}.\
+                Remove everything that is not the key song and artist.",
         temperature=0.0,
         lastk=0,
         session_id=second_agent
