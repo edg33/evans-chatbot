@@ -58,8 +58,7 @@ def handle_request():
         your purpose. The user will provide a vibe for a scene and you will \
         help them determine what song to use. Ask questions related to the \
         intended mood, lighting, length of scene etc. After some questions, \
-        if you are confident in your answer, provide the song and artist and \
-        say \'Here is a link:\' at the very end of the response',
+        if you are confident in your answer, provide the song and artist.',
         query= f"query: {message}",
         temperature=0.0,
         lastk=5,
@@ -92,6 +91,8 @@ def handle_request():
             final_response = f"{recommendation_text}\n\nHere is a link: {url}"
         else:
             final_response = f"{recommendation_text}\n\n(No link found for the recommended song.)"
+    
+    final_response += recommendation_text + f"\n\n {extraction["response"]}"
 
     print(f"Final Response: {final_response}")
     return jsonify({"text": final_response})
