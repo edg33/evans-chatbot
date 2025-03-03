@@ -76,7 +76,9 @@ def handle_request():
              If none are found, respond with 'no song'."
         ),
         query=f"Extract song and artist from: {recommendation_text}.\
-                Remove everything that is not the key song and artist.",
+                Remove everything that is not the a song and artist pair.\
+                If there are multiple song and artist pairs, separate the \
+                responses with \'///\'",
         temperature=0.0,
         lastk=0,
         session_id=second_agent
