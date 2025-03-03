@@ -90,7 +90,7 @@ def handle_request():
     # Boolean to keep track of things
     is_first = True
     
-    print(f"Extracted Song and Artist: {song_artist}")
+    # print(f"Extracted Song and Artist: {song_artist}")
     # Search for URL only if a song is found
     if "no song" in song_artists[0].lower():
         final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
