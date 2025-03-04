@@ -57,8 +57,11 @@ def handle_request():
         has an ambiguous prompt or a greeting, greet the user and explain \
         your purpose. The user will provide a vibe for a scene and you will \
         help them determine what song to use. Ask questions related to the \
-        intended mood, lighting, length of scene etc. After some questions, \
-        if you are confident in your answer, provide the song and artist.',
+        intended mood, lighting, length of scene etc. Make sure to ask how\
+        many songs the user wants. Do not provide more than 10 song \
+        recommendations. After some questions, \
+        if you are confident in your answer, provide the song and artist. \
+        If you are not confident in your answer, ask more clarifying questions.',
         query= f"query: {message}",
         temperature=0.0,
         lastk=5,
@@ -93,7 +96,8 @@ def handle_request():
     # print(f"Extracted Song and Artist: {song_artist}")
     # Search for URL only if a song is found
     if "no song" in song_artists[0].lower():
-        final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
+        # final_response = f"{recommendation_text}\n\n(No song recommendation provided.)"
+        final_response = f"{recommendation_text}"
     else:
         # Search for each song
         for song_artist in song_artists:
@@ -112,7 +116,7 @@ def handle_request():
                 else:
                     final_response += f"\n\n{song_artist}:(No link)"
     
-    final_response = final_response + f"\n\n {extraction["response"]}"
+    # final_response = final_response + f"\n\n {extraction["response"]}"
 
     print(f"Final Response: {final_response}")
     return jsonify({"text": final_response})
