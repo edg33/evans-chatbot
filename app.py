@@ -3,6 +3,8 @@ from flask import Flask, request, jsonify
 from llmproxy import generate
 import os
 
+
+
 app = Flask(__name__)
 
 def google_search(query):
@@ -115,6 +117,29 @@ def handle_request():
                     final_response += f"\n\n{song_artist}: {url}"
                 else:
                     final_response += f"\n\n{song_artist}:(No link)"
+    
+    # API endpoint
+    endpoint = "https://chat.genaiconnect.net/api/v1/chat.postMessage" #URL of RocketChat server, keep the same
+
+    # Headers with authentication tokens
+    headers = {
+        "Content-Type": "application/json",
+        "X-Auth-Token": os.environ.get("RC_token"), #Replace with your bot token for local testing or keep it and store secrets in Koyeb
+        "X-User-Id": os.environ.get("RC_userId")#Replace with your bot user id for local testing or keep it and store secrets in Koyeb
+    }
+
+    # Payload (data to be sent)
+    payload = {
+        "channel": "@juliana.alscher", #Change this to your desired user, for any user it should start with @ then the username
+        "text": "This is a direct message from the bot" #This where you add your message to the user
+    }
+
+    # Sending the POST request
+    response = requests.post(endpoint, json=payload, headers=headers)
+
+    # Print response status and content
+    print(response.status_code)
+    print(response.json())  
     
     # final_response = final_response + f"\n\n {extraction["response"]}"
 
