@@ -141,6 +141,7 @@ def handle_request():
     if "no song" in song_artists[0].lower():
         final_response = f"{recommendation_text}"
     else:
+        message_items = ""
         # Search for each song
         for song_artist in song_artists:
             # If first start the chain
@@ -148,15 +149,40 @@ def handle_request():
                 url = google_search(song_artist)
                 if url:
                     final_response = f"{recommendation_text}\n\n{song_artist}: {url}"
+                    message_items += f"{song_artist}: {url}"
                 else:
-                    final_response = f"{recommendation_text}\n\n{song_artist}:(No link)"
+                    final_response = f"{recommendation_text}\n\n{song_artist}: (No link)"
+                    message_items += f"{song_artist}: (No link)"
                 is_first = False 
             else:
                 url = google_search(song_artist)
                 if url:
                     final_response += f"\n\n{song_artist}: {url}"
+                    message_items += f"\n\n{song_artist}: {url}"
                 else:
-                    final_response += f"\n\n{song_artist}:(No link)"
+                    final_response += f"\n\n{song_artist}: (No link)"
+                    message_items += f"\n\n{song_artist}: (No link)"
+        # Send the songs
+        # API endpoint
+        endpoint = "https://chat.genaiconnect.net/api/v1/chat.postMessage"
+        # Headers with authentication tokens
+        headers = {
+            "Content-Type": "application/json",
+            "X-Auth-Token": os.environ.get("RC_token"), #Replace with your bot token for local testing or keep it and store secrets in Koyeb
+            "X-User-Id": os.environ.get("RC_userId")#Replace with your bot user id for local testing or keep it and store secrets in Koyeb
+        }
+        # Payload (data to be sent)
+        payload = {
+            "channel": "@juliana.alscher", #Change this to your desired user, for any user it should start with @ then the username
+            "text": f"What do you think of these songs for your scene with {user}?\n\n" + message_items
+        }
+        
+        # Sending the POST request
+        response = requests.post(endpoint, json=payload, headers=headers)
+        
+        # Print response status and content
+        print(response.status_code)
+        print(response.json()) 
     
     # Save the current question context to session or global variable
     # (This is a simplified approach - in production you might use a database)
@@ -187,6 +213,7 @@ def handle_request():
             }
         ]
     }
+    
 
     print(f"Final Response: {final_response}")
     return jsonify(response_with_buttons)
