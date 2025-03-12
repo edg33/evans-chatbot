@@ -1,63 +1,9 @@
 import requests
+from flask import Flask, request, jsonify
+from llmproxy import generate
 import os
-import time
-from flask import Flask, request, jsonify, abort
-from llmproxy import generate, retrieve, text_upload
-from string import Template
-import random
 
 app = Flask(__name__)
-
-# Global variables
-ROCKET_CHAT_URL = "https://chat.genaiconnect.net"
-ROCKET_USER_ID = os.environ.get("RC_userId")
-ROCKET_AUTH_TOKEN = os.environ.get("RC_token")
-
-ID_VAL = random.randint(1,100000)
-
-
-# File handling
-UPLOAD_FOLDER = "uploads"
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif'}
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def download_file(file_id, filename):
-    """Download file from Rocket.Chat and save locally."""
-    if allowed_file(filename):
-        file_url = f"{ROCKET_CHAT_URL}/file-upload/{file_id}/{filename}"
-        headers = {
-            "X-User-Id": ROCKET_USER_ID,
-            "X-Auth-Token": ROCKET_AUTH_TOKEN
-        }   
-        print(f"DEBUG: Requesting file from {file_url}")
-        response = requests.get(file_url, headers=headers, stream=True)
-        if response.status_code == 200:
-            local_path = os.path.join(UPLOAD_FOLDER, filename)
-            print(f"DEBUG: File {filename} successfully retrieved. Saving to {local_path}")
-            with open(local_path, "wb") as file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    file.write(chunk)
-            return local_path
-    
-    print(f"INFO - some issue with {filename} with {response.status_code} code")
-    return None
-
-def extract_text_from_file(file_path):
-    """Extract text from TXT files."""
-    ext = file_path.split('.')[-1].lower()
-    print(f"DEBUG: Extracting text from {file_path} with extension {ext}")
-    
-    if ext == 'txt':
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    else:
-        print("ERROR: Unsupported file format for extraction.")
-        return "Unsupported file format."
 
 def google_search(query):
     """Queries Google Search API and returns the first result link."""
@@ -67,7 +13,7 @@ def google_search(query):
         "key": os.environ.get("GOOGLE_API_KEY"),
         "cx": os.environ.get("GOOGLE_CSE_ID"),
         "q": query,
-        "num": 1
+        "num": 1  # Might change this
     }
     
     response = requests.get(search_url, params=params)
@@ -75,427 +21,148 @@ def google_search(query):
     if response.status_code == 200:
         search_results = response.json().get("items", [])
         if search_results:
-            return search_results[0]["link"]
+            return search_results[0]["link"]  # Return only the first result
     print(f"Error: {response.status_code}, {response.text}")
     return None
 
-def rag_context_string(rag_context):
-    """Format RAG context for the LLM."""
-    context_string = ""
-
-    i = 1
-    for collection in rag_context:
-        if not context_string:
-            context_string = "The following is additional context from the script that may be helpful in recommending songs for the scene:"
-
-        context_string += f"\n#{i} {collection.get('doc_summary', 'Document chunk')}\n"
-        j = 1
-        for chunk in collection.get('chunks', []):
-            context_string += f"#{i}.{j} {chunk}\n"
-            j += 1
-        i += 1
-    return context_string
-
-def analyze_script_agentic(script_text, user_id):
-    """Use an agentic workflow to analyze the script and recommend songs."""
-    session_id = f"{user_id}_script_analysis_{ID_VAL}"
-    
-    print(f"DEBUG: Starting script analysis for user {user_id}")
-    
-    # Make the first analysis call more focused and efficient
-    analyzer_response = generate(
-        model='4o-mini',
-        system="""You are an expert script analyzer for music selection. Extract ONLY the following key information:
-        1. Setting/time period (1-2 sentences)
-        2. Mood/tone (1-2 sentences)
-        3. Key themes (3-5 keywords)
-        4. Character dynamics (1-2 sentences)
-        5. Pace (fast/medium/slow)
-        Be extremely concise.""",
-        query=f"Here is a script to analyze for music selection:\n\n{script_text}",
-        temperature=0.2,
-        lastk=3,  # Reduced from 5
-        session_id=session_id
-    )
-    
-    analysis = analyzer_response["response"]
-    print("DEBUG: Script analysis completed.")
-    print("DEBUG: Starting recommendation")
-    
-    # Skip the intermediate Q&A step and go directly to recommendations
-    recommendation_response = generate(
-        model='4o-mini',
-        system="""You are a professional music supervisor. Based on the script analysis, recommend 3-4 songs that would work well.
-        For each song, provide:
-        1. Song title and artist
-        2. Brief explanation (1-2 sentences) of why this song fits
-        
-        Format as:
-        1. Song - Artist
-           Explanation
-        
-        2. Song - Artist
-           Explanation
-        
-        Be concise and varied in your selections.""",
-        query=f"Based on this script analysis, recommend appropriate songs:\n\n{analysis}",
-        temperature=0.6,
-        lastk=3,  # Reduced from 5
-        session_id=f"{user_id}_script_recommendation_{ID_VAL}"
-    )
-    print("DEBUG: Finished recommendation")
-    
-    # Format final output in a more compact way
-    final_output = f"""
-                    Script Analysis:
-                    {analysis}
-
-                    Song Recommendations:
-                    {recommendation_response["response"]}
-                    """
-    print(final_output)
-    return final_output
-
-def send_message_with_file(room_id, message, file_path):
-    """Send a message with a file to Rocket.Chat."""
-    url = f"{ROCKET_CHAT_URL}/api/v1/rooms.upload/{room_id}"
-    headers = {
-        "X-User-Id": ROCKET_USER_ID,
-        "X-Auth-Token": ROCKET_AUTH_TOKEN
-    }
-    files = {"file": (os.path.basename(file_path), open(file_path, "rb"))}
-    data = {"msg": message}
-
-    response = requests.post(url, headers=headers, files=files, data=data)
-    if response.status_code != 200:
-        return {"error": f"Failed to upload file, Status Code: {response.status_code}, Response: {response.text}"}
-    try:
-        return response.json()
-    except requests.exceptions.JSONDecodeError:
-        return {"error": "Invalid JSON response from Rocket.Chat API", "raw_response": response.text}
-
 @app.route('/', methods=['POST'])
 def handle_request():
-    global ID_VAL
-    data = request.get_json()
-    print(f"DEBUG: Received request data: {data}")
-    
-    # Validate data
-    if not data:
-        return jsonify({"error": "Invalid request format"}), 400
+    data = request.get_json() 
 
     # Extract relevant information
-    
     user = data.get("user_name", "Unknown")
-    user_id = data.get("user_id", f"user_{int(time.time())}")
-    room_id = data.get("channel_id", "")
+    second_agent = user + "_2"
+    third_agent = user + "_3"
+    examples_agent = user + "_examples"
     message = data.get("text", "")
-    print(f"DEBUG: Processing request from user {user} (ID: {user_id})")
 
-    print(f"Received data: {data}")
+    print(data)
 
-    # Check if this is a button action
+    # Check for button clicks
     if "examples" in message:
+        # Generate examples based on the last question from the bot
         examples_response = generate(
             model='4o-mini',
             system=(
                 "You are a helpful assistant that provides concrete examples based on questions. "
-                "When given a question, provide 3-4 realistic and varied examples of how someone might answer that question. "
-                "Keep each example brief. Format each example with a bullet point."
+                "When given a question, provide 3-4 realistic and varied examples based on the previous conversation "
+                "of how someone might answer that question. Keep each example brief. "
+                "Format each example with a bullet point."
             ),
-            query="The user was asked to describe the vibe of their movie scene or to provide details about mood, lighting, etc. "
-                 "Generate 3-4 examples of possible answers to the question being posed and showcase various film genres and moods.",
-            temperature=0.7,
+            query=f"The user was asked to describe the vibe of their movie scene or to provide details about mood, lighting, etc. "
+                 f"Generate 3-4  examples of possible answers to the question being posed. "
+                 f"and showcase various film genres and moods.",
+            temperature=0.7,  # Higher temperature for more creative examples
             lastk=0,
-            session_id=f"{user}_examples_{ID_VAL}"
+            session_id=examples_agent
         )
         
         examples_text = examples_response["response"]
         return jsonify({"text": f"Here are some examples of how you could describe your scene:\n\n{examples_text}"})
     
     if message == "restart":
-        ID_VAL = random.randint(1,100000)
-        # Reset all session contexts associated with this user
-        session_ids = [
-            user,  # Main conversation session
-            f"{user}_examples_{ID_VAL}",
-            f"{user_id}_RAG_{ID_VAL}",
-            f"{user_id}_script_analysis_{ID_VAL}",
-            f"{user_id}_script_recommendation_{ID_VAL}",
-            f"{user_id}_extractor_{ID_VAL}",
-            f"{user}_recipient_{ID_VAL}",
-            f"{user}_song_extractor_{ID_VAL}"
-        ]
-        
-        # Reset each session
-        for session_id in session_ids:
-            try:
-                generate(
-                    model='4o-mini',
-                    system="This is a new conversation. Previous context has been cleared.",
-                    query="Reset all context",
-                    temperature=0.0,
-                    lastk=0,
-                    session_id=session_id
-                )
-                print(f"DEBUG: Reset session {session_id}")
-            except Exception as e:
-                print(f"Error resetting session {session_id}: {e}")
-            
+        # Clear session
         return jsonify({
-            "text": "Let's start over! Please describe the vibe of your movie scene or upload a script file."
+            "text": "Let's start over! Please describe the vibe of your movie scene."
         })
-    
-    if message == "analyze_script":
-        return jsonify({
-            "text": "Please upload a script file (TXT) and I'll analyze it to recommend songs."
-        })
-
-    # Handle file upload - improved handling based on second example
-    if ("message" in data) and ('file' in data['message']):
-        print(f"File detected in message")
-        saved_files = []
-
-        for file_info in data["message"]["files"]:
-            file_id = file_info["_id"]
-            filename = file_info["name"]
-            
-            # Download file
-            file_path = download_file(file_id, filename)
-            
-            if file_path:
-                saved_files.append(file_path)
-                
-                # Extract text from the file if it's a document type
-                ext = filename.split('.')[-1].lower()
-                print("DEBUG", ext)
-                if ext in ['txt', 'pdf', 'docx', 'doc']:
-                    # Extract text from the file
-                    script_text = extract_text_from_file(file_path)
-                    
-                    # Upload the script text to RAG
-                    rag_response = text_upload(
-                        text=script_text,
-                        session_id=f"{user_id}_RAG_{ID_VAL}",
-                        strategy='fixed'
-                    )
-                    print("DEBUG: Text upload")
-                    time.sleep(10)  # Wait for indexing
-                    
-                    print("DEBUG: Starting Analysis")
-                    # Analyze the script using agentic approach
-                    analysis_result = analyze_script_agentic(script_text, user_id)
-                    print("DEBUG: Finished Analysis")
-                    print("DEBUG: Start Extraction")
-                    # Extract songs from the analysis
-                    song_extraction = generate(
-                        model='4o-mini',
-                        system="Extract only the song titles and artists from the provided text. Format as 'Song - Artist'. If there are multiple songs, separate them with '///'.",
-                        query=f"Extract songs from: {analysis_result}",
-                        temperature=0.0,
-                        lastk=0,
-                        session_id=f"{user_id}_extractor_{ID_VAL}"
-                    )
-                    print("DEBUG: Finish extraction")
-                    
-                    songs = song_extraction["response"].split("///")
-                    print("DEBUG:", songs)
-                    # Add links to songs
-                    song_links = []
-                    for song in songs:
-                        if song.strip():
-                            url = google_search(song.strip())
-                            if url:
-                                song_links.append(f"{song.strip()}: {url}")
-                            else:
-                                song_links.append(f"{song.strip()}: (No link)")
-                    
-                    # Ask who to share with
-                    share_question = "Who would you like to share these song recommendations with? Please provide their first and last name."
-                    
-                    final_response = f"Based on your script, I've analyzed it and generated song recommendations:\n\n{analysis_result}\n\n"
-                    final_response += "Here are links to the recommended songs:\n\n"
-                    final_response += "\n\n".join(song_links)
-                    final_response += f"\n\n{share_question}"
-                    print(final_response)
-                    return jsonify({
-                        "text": final_response,
-                        "attachments": [
-                            {
-                                "text": "What would you like to do next?",
-                                "actions": [
-                                    # {
-                                    #     "type": "button",
-                                    #     "text": "Get More Recommendations",
-                                    #     "msg": "analyze_script",
-                                    #     "msg_in_chat_window": True,
-                                    #     "msg_processing_type": "sendMessage"
-                                    # },
-                                    {
-                                        "type": "button",
-                                        "text": "Restart",
-                                        "msg": "restart",
-                                        "msg_in_chat_window": True,
-                                        "msg_processing_type": "sendMessage"
-                                    }
-                                ]
-                            }
-                        ]
-                    })
-                else:
-                    # For non-script files, just acknowledge receipt
-                    return jsonify({
-                        "text": f"File '{filename}' received. Please upload a script file (PDF, TXT, or DOCX) for analysis.",
-                        "attachments": [
-                            {
-                                "text": "What would you like to do?",
-                                "actions": [
-                                    {
-                                        "type": "button",
-                                        "text": "Analyze Script",
-                                        "msg": "analyze_script",
-                                        "msg_in_chat_window": True,
-                                        "msg_processing_type": "sendMessage"
-                                    }
-                                ]
-                            }
-                        ]
-                    })
-            else:
-                return jsonify({"error": "Failed to download file"}), 500
 
     # Ignore bot messages
     if data.get("bot") or not message:
         return jsonify({"status": "ignored"})
 
-    print(f"Message from {user}: {message}")
+    print(f"Message from {user} : {message}")
     
-    # Extract recipient if present (for sharing recommendations)
+    # Generate a response using LLMProxy
+    response = generate(
+        model='4o-mini',
+        system='You are an assistant to help movie makers determine what song \
+        to put in their movie scene. If the question is unrelated to this topic \
+        politely remind the user of your purpose. If it appears the user \
+        has an ambiguous prompt or a greeting, greet the user and explain \
+        your purpose. The user will provide a vibe for a scene and you will \
+        help them determine what song to use. The questions should be straight to the point \
+        do not give examples of the answer uNLESS they ask. Ask questions related to the \
+        intended mood, lighting, length of scene etc, one by one so that the \
+        user starts building an idea of what they want or have in mind.\
+        after they go through a series of questions, ask them if they have anything else \
+        they wat to add and if not, ask them how many songs they want \
+        Do not provide more than 10 song recommendations. After they provide you answers \
+        to your questions and if you are confident in your answer, provide the song and artist. \
+        If you are not confident in your answer, ask more clarifying questions. After you provide songs \
+        ask if they like them or if they want to change something. \
+        If you are providing song recommendations, ask who they want to share these recommendations with \
+        by requesting their first and last name.',
+        query= f"query: {message}",
+        temperature=0.0,
+        lastk=5,
+        session_id=user
+    )
+    
+    recommendation_text = response["response"]
+    
+    # Extract the question being asked to use for examples later
+    question_extraction = generate(
+        model='4o-mini',
+        system=(
+            "You are helping identify questions in text. Extract only the most recent question "
+            "that the assistant is asking the user about their movie scene. If there are multiple "
+            "questions, focus on the main one related to describing the scene, mood, lighting, etc."
+        ),
+        query=f"Extract the main question from this text: {recommendation_text}",
+        temperature=0.0,
+        lastk=0,
+        session_id=third_agent
+    )
+    
+    current_question = question_extraction['response']
+    
+    # Gets the song and artist so it can be searched
+    extraction = generate(
+        model='4o-mini',
+        system=(
+            "You are helping a second agent. Extract only the song and artist from the provided text. \
+             Remove everything that is not the key song and artist. \
+             If none are found, respond with 'no song'."
+        ),
+        query=f"Extract song and artist from: {recommendation_text}.\
+                Remove everything that is not the a song and artist pair.\
+                If there are multiple song and artist pairs, separate the \
+                responses with \'///\'",
+        temperature=0.0,
+        lastk=0,
+        session_id=second_agent
+    )
+
+    song_artists = extraction['response']
+    song_artists = song_artists.split("///")
+    
+    # Extract recipient name if present
     recipient_extraction = generate(
         model='4o-mini',
         system=(
-            "You are helping extract recipient information. If the text contains a first and last name as "
-            "a response to who to share recommendations with, extract that name. "
-            "If no name is found, respond with 'no recipient'."
+            "You are helping extract recipient information. If the text contains a question about "
+            "who to share recommendations with and a response with a first and last name, extract "
+            "that name. If no name is found, respond with 'no recipient'."
         ),
         query=f"Extract recipient name from: {message}. If there's a first and last name mentioned as "
               f"someone to share recommendations with, extract it. Otherwise respond with 'no recipient'.",
         temperature=0.0,
         lastk=0,
-        session_id=f"{user}_recipient_{ID_VAL}"
-        )
-
-    # Check the type and format of the return value
-    if isinstance(recipient_extraction, dict) and "response" in recipient_extraction:
-        recipient = recipient_extraction["response"]
-    else:
-        recipient = str(recipient_extraction)
-    
-    # Check if the user wants to use the RAG context (have they uploaded a script)
-    use_rag = False
-    try:
-        rag_context = retrieve(
-            query=message,
-            session_id=f"{user_id}_RAG_{ID_VAL}",
-            rag_threshold=0.2,
-            rag_k=3
-        )
-        if rag_context:
-            use_rag = True
-    except Exception as e:
-        print(f"RAG retrieval error: {e}")
-        use_rag = False
-    
-    # Generate a response using LLMProxy
-    if use_rag:
-        # Format context from RAG
-        context_string = rag_context_string(rag_context)
-        
-        # Generate with context from the uploaded script
-        query_with_context = Template("$query\n$context").substitute(
-            query=message,
-            context=context_string
-        )
-        
-        system_prompt = """You are an assistant to help movie makers determine what song to put in their movie scene.
-        You have been provided with context from a script that the user uploaded.
-        If the question is unrelated to this topic, politely remind the user of your purpose.
-        Based on the script context and the user's input, help determine appropriate songs for the scene.
-        After providing song recommendations, ask if they like them or if they want to change something.
-        If you are providing song recommendations, ask who they want to share these recommendations with
-        by requesting their first and last name."""
-        
-        response = generate(
-            model='4o-mini',
-            system=system_prompt,
-            query=query_with_context,
-            temperature=0.0,
-            lastk=5,
-            session_id=user + f"_{ID_VAL}"
-        )
-    else:
-        # Standard response without RAG
-        system_prompt = """You are an assistant to help movie makers determine what song to put in their movie scene.
-        If the question is unrelated to this topic, politely remind the user of your purpose.
-        If it appears the user has an ambiguous prompt or a greeting, greet the user and explain your purpose.
-        The user will provide a vibe for a scene and you will help them determine what song to use.
-        The questions should be straight to the point. Do not give examples of the answer UNLESS they ask.
-        Ask questions related to the intended mood, lighting, length of scene etc, one by one so that the
-        user starts building an idea of what they want or have in mind.
-        After they go through a series of questions, ask them if they have anything else they want to add
-        and if not, ask them how many songs they want. Do not provide more than 10 song recommendations.
-        After they provide you answers to your questions and if you are confident in your answer,
-        provide the song and artist. If you are not confident in your answer, ask more clarifying questions.
-        After you provide songs, ask if they like them or if they want to change something.
-        If you are providing song recommendations, ask who they want to share these recommendations with
-        by requesting their first and last name.
-        
-        If the user is asking to analyze a script, inform them they can upload a script file (TXT)
-        and you'll analyze it to recommend songs automatically."""
-        
-        response = generate(
-            model='4o-mini',
-            system=system_prompt,
-            query=message,
-            temperature=0.0,
-            lastk=5,
-            session_id=user + f"_{ID_VAL}"
-        )
-    
-    recommendation_text = response["response"]
-    
-    # Extract songs from the response
-    song_extraction = generate(
-        model='4o-mini',
-        system=(
-            "You are helping a second agent. Extract only the song and artist from the provided text. "
-            "Remove everything that is not the key song and artist. "
-            "If none are found, respond with 'no song'."
-        ),
-        query=f"Extract song and artist from: {recommendation_text}. "
-              f"Remove everything that is not a song and artist pair. "
-              f"If there are multiple song and artist pairs, separate the "
-              f"responses with '///'",
-        temperature=0.0,
-        lastk=0,
-        session_id=f"{user}_song_extractor_{ID_VAL}"
+        session_id=user + "_recipient"
     )
-
-    song_artists = song_extraction["response"].split("///")
+    
+    recipient = recipient_extraction['response']
     
     # Boolean to keep track of things
     is_first = True
     
     # Search for URL only if a song is found
     if "no song" in song_artists[0].lower():
-        final_response = recommendation_text
+        final_response = f"{recommendation_text}"
     else:
         message_items = ""
         # Search for each song
         for song_artist in song_artists:
-            if not song_artist.strip():
-                continue
-                
             # If first start the chain
             if is_first:
                 url = google_search(song_artist)
@@ -526,17 +193,17 @@ def handle_request():
                 recipient_username = f"@{recipient.lower()}"
             
             # API endpoint
-            endpoint = f"{ROCKET_CHAT_URL}/api/v1/chat.postMessage"
+            endpoint = "https://chat.genaiconnect.net/api/v1/chat.postMessage"
             # Headers with authentication tokens
             headers = {
                 "Content-Type": "application/json",
-                "X-Auth-Token": ROCKET_AUTH_TOKEN,
-                "X-User-Id": ROCKET_USER_ID
+                "X-Auth-Token": os.environ.get("RC_token"),
+                "X-User-Id": os.environ.get("RC_userId")
             }
             # Payload (data to be sent)
             payload = {
                 "channel": recipient_username,
-                "text": f"What do you think of these songs for your scene with {user}?\n\n{message_items}"
+                "text": f"What do you think of these songs for your scene with {user}?\n\n" + message_items
             }
             
             # Sending the POST request
@@ -550,12 +217,9 @@ def handle_request():
             
             # Print response status and content
             print(response.status_code)
-            try:
-                print(response.json())
-            except:
-                print("Could not parse JSON response")
+            print(response.json())
     
-    # Add special buttons based on content
+    # Add examples/restart buttons to the response
     response_with_buttons = {
         "text": final_response,
         "attachments": [
@@ -566,13 +230,6 @@ def handle_request():
                         "type": "button",
                         "text": "Examples",
                         "msg": "examples",
-                        "msg_in_chat_window": True,
-                        "msg_processing_type": "sendMessage"
-                    },
-                    {
-                        "type": "button",
-                        "text": "Analyze Script",
-                        "msg": "analyze_script",
                         "msg_in_chat_window": True,
                         "msg_processing_type": "sendMessage"
                     },
