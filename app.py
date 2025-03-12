@@ -16,7 +16,7 @@ ROCKET_AUTH_TOKEN = os.environ.get("RC_token")
 UPLOAD_FOLDER = "uploads"
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif'}
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -49,24 +49,6 @@ def extract_text_from_file(file_path):
     if ext == 'txt':
         with open(file_path, 'r', encoding='utf-8') as f:
             return f.read()
-    elif ext == 'pdf':
-        try:
-            import PyPDF2
-            with open(file_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                text = ""
-                for page in reader.pages:
-                    text += page.extract_text()
-                return text
-        except ImportError:
-            return "Error: PyPDF2 not installed. Please install it to process PDF files."
-    elif ext in ['docx', 'doc']:
-        try:
-            import docx
-            doc = docx.Document(file_path)
-            return '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-        except ImportError:
-            return "Error: python-docx not installed. Please install it to process Word documents."
     else:
         return "Unsupported file format."
 
@@ -167,15 +149,15 @@ def analyze_script_agentic(script_text, user_id):
     
     # Format final output to include the entire thought process
     final_output = f"""
-Script Analysis:
-{analysis}
+                    Script Analysis:
+                    {analysis}
 
-Questions and Answers I considered:
-{qa_pairs}
+                    Questions and Answers I considered:
+                    {qa_pairs}
 
-Song Recommendations:
-{recommendation_response["response"]}
-"""
+                    Song Recommendations:
+                    {recommendation_response["response"]}
+                    """
     
     return final_output
 
@@ -200,6 +182,10 @@ def send_message_with_file(room_id, message, file_path):
 @app.route('/', methods=['POST'])
 def handle_request():
     data = request.get_json()
+    
+    # Validate data
+    if not data:
+        return jsonify({"error": "Invalid request format"}), 400
 
     # Extract relevant information
     user = data.get("user_name", "Unknown")
@@ -235,10 +221,10 @@ def handle_request():
     
     if message == "analyze_script":
         return jsonify({
-            "text": "Please upload a script file (PDF, TXT, or DOCX) and I'll analyze it to recommend songs."
+            "text": "Please upload a script file (TXT) and I'll analyze it to recommend songs."
         })
 
-    # Handle file upload
+    # Handle file upload - improved handling based on second example
     if ("message" in data) and ('file' in data['message']):
         print(f"File detected in message")
         saved_files = []
@@ -246,82 +232,104 @@ def handle_request():
         for file_info in data["message"]["files"]:
             file_id = file_info["_id"]
             filename = file_info["name"]
-
+            
             # Download file
             file_path = download_file(file_id, filename)
-
+            
             if file_path:
                 saved_files.append(file_path)
                 
-                # Extract text from the file
-                script_text = extract_text_from_file(file_path)
-                
-                # Upload the script text to RAG
-                rag_response = text_upload(
-                    text=script_text,
-                    session_id=f"{user_id}_RAG",
-                    strategy='fixed'
-                )
-                
-                time.sleep(10)  # Wait for indexing
-                
-                # Analyze the script using agentic approach
-                analysis_result = analyze_script_agentic(script_text, user_id)
-                
-                # Extract songs from the analysis
-                song_extraction = generate(
-                    model='4o-mini',
-                    system="Extract only the song titles and artists from the provided text. Format as 'Song - Artist'. If there are multiple songs, separate them with '///'.",
-                    query=f"Extract songs from: {analysis_result}",
-                    temperature=0.0,
-                    lastk=0,
-                    session_id=f"{user_id}_extractor"
-                )
-                
-                songs = song_extraction["response"].split("///")
-                
-                # Add links to songs
-                song_links = []
-                for song in songs:
-                    if song.strip():
-                        url = google_search(song.strip())
-                        if url:
-                            song_links.append(f"{song.strip()}: {url}")
-                        else:
-                            song_links.append(f"{song.strip()}: (No link)")
-                
-                # Ask who to share with
-                share_question = "Who would you like to share these song recommendations with? Please provide their first and last name."
-                
-                final_response = f"Based on your script, I've analyzed it and generated song recommendations:\n\n{analysis_result}\n\n"
-                final_response += "Here are links to the recommended songs:\n\n"
-                final_response += "\n\n".join(song_links)
-                final_response += f"\n\n{share_question}"
-                
-                return jsonify({
-                    "text": final_response,
-                    "attachments": [
-                        {
-                            "text": "What would you like to do next?",
-                            "actions": [
-                                {
-                                    "type": "button",
-                                    "text": "Get More Recommendations",
-                                    "msg": "analyze_script",
-                                    "msg_in_chat_window": True,
-                                    "msg_processing_type": "sendMessage"
-                                },
-                                {
-                                    "type": "button",
-                                    "text": "Restart",
-                                    "msg": "restart",
-                                    "msg_in_chat_window": True,
-                                    "msg_processing_type": "sendMessage"
-                                }
-                            ]
-                        }
-                    ]
-                })
+                # Extract text from the file if it's a document type
+                ext = filename.split('.')[-1].lower()
+                if ext in ['txt', 'pdf', 'docx', 'doc']:
+                    # Extract text from the file
+                    script_text = extract_text_from_file(file_path)
+                    
+                    # Upload the script text to RAG
+                    rag_response = text_upload(
+                        text=script_text,
+                        session_id=f"{user_id}_RAG",
+                        strategy='fixed'
+                    )
+                    
+                    time.sleep(10)  # Wait for indexing
+                    
+                    # Analyze the script using agentic approach
+                    analysis_result = analyze_script_agentic(script_text, user_id)
+                    
+                    # Extract songs from the analysis
+                    song_extraction = generate(
+                        model='4o-mini',
+                        system="Extract only the song titles and artists from the provided text. Format as 'Song - Artist'. If there are multiple songs, separate them with '///'.",
+                        query=f"Extract songs from: {analysis_result}",
+                        temperature=0.0,
+                        lastk=0,
+                        session_id=f"{user_id}_extractor"
+                    )
+                    
+                    songs = song_extraction["response"].split("///")
+                    
+                    # Add links to songs
+                    song_links = []
+                    for song in songs:
+                        if song.strip():
+                            url = google_search(song.strip())
+                            if url:
+                                song_links.append(f"{song.strip()}: {url}")
+                            else:
+                                song_links.append(f"{song.strip()}: (No link)")
+                    
+                    # Ask who to share with
+                    share_question = "Who would you like to share these song recommendations with? Please provide their first and last name."
+                    
+                    final_response = f"Based on your script, I've analyzed it and generated song recommendations:\n\n{analysis_result}\n\n"
+                    final_response += "Here are links to the recommended songs:\n\n"
+                    final_response += "\n\n".join(song_links)
+                    final_response += f"\n\n{share_question}"
+                    
+                    return jsonify({
+                        "text": final_response,
+                        "attachments": [
+                            {
+                                "text": "What would you like to do next?",
+                                "actions": [
+                                    {
+                                        "type": "button",
+                                        "text": "Get More Recommendations",
+                                        "msg": "analyze_script",
+                                        "msg_in_chat_window": True,
+                                        "msg_processing_type": "sendMessage"
+                                    },
+                                    {
+                                        "type": "button",
+                                        "text": "Restart",
+                                        "msg": "restart",
+                                        "msg_in_chat_window": True,
+                                        "msg_processing_type": "sendMessage"
+                                    }
+                                ]
+                            }
+                        ]
+                    })
+                else:
+                    # For non-script files, just acknowledge receipt
+                    return jsonify({
+                        "text": f"File '{filename}' received. Please upload a script file (PDF, TXT, or DOCX) for analysis.",
+                        "attachments": [
+                            {
+                                "text": "What would you like to do?",
+                                "actions": [
+                                    {
+                                        "type": "button",
+                                        "text": "Analyze Script",
+                                        "msg": "analyze_script",
+                                        "msg_in_chat_window": True,
+                                        "msg_processing_type": "sendMessage"
+                                    }
+                                ]
+                            }
+                        ]
+                    })
             else:
                 return jsonify({"error": "Failed to download file"}), 500
 
