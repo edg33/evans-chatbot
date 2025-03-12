@@ -176,6 +176,7 @@ def send_message_with_file(room_id, message, file_path):
 
 @app.route('/', methods=['POST'])
 def handle_request():
+    global ID_VAL
     data = request.get_json()
     print(f"DEBUG: Received request data: {data}")
     
@@ -213,7 +214,6 @@ def handle_request():
         return jsonify({"text": f"Here are some examples of how you could describe your scene:\n\n{examples_text}"})
     
     if message == "restart":
-        global ID_VAL
         ID_VAL = random.randint(1,100000)
         # Reset all session contexts associated with this user
         session_ids = [
