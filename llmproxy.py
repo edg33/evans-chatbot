@@ -6,21 +6,54 @@ import requests
 end_point = os.environ.get("endPoint")
 api_key = os.environ.get("apiKey")
 
+def retrieve(
+    query: str,
+    session_id: str,
+    rag_threshold: float,
+    rag_k: int
+    ):
+
+    headers = {
+        'x-api-key': api_key,
+        'request_type': 'retrieve'
+    }
+
+    request = {
+        'query': query,
+        'session_id': session_id,
+        'rag_threshold': rag_threshold,
+        'rag_k': rag_k
+    }
+
+    msg = None
+
+    try:
+        response = requests.post(end_point, headers=headers, json=request)
+
+        if response.status_code == 200:
+            msg = json.loads(response.text)
+        else:
+            msg = f"Error: Received response code {response.status_code}"
+    except requests.exceptions.RequestException as e:
+        msg = f"An error occurred: {e}"
+    return msg  
+
 def generate(
-	model: str,
-	system: str,
-	query: str,
-	temperature: float | None = None,
-	lastk: int | None = None,
-	session_id: str | None = None,
+    model: str,
+    system: str,
+    query: str,
+    temperature: float | None = None,
+    lastk: int | None = None,
+    session_id: str | None = None,
     rag_threshold: float | None = 0.5,
     rag_usage: bool | None = False,
     rag_k: int | None = 0
-	):
-	
+    ):
+    
 
     headers = {
-        'x-api-key': api_key
+        'x-api-key': api_key,
+        'request_type': 'call'
     }
 
     request = {
@@ -47,14 +80,15 @@ def generate(
             msg = f"Error: Received response code {response.status_code}"
     except requests.exceptions.RequestException as e:
         msg = f"An error occurred: {e}"
-    return msg	
+    return msg  
 
 
 
 def upload(multipart_form_data):
 
     headers = {
-        'x-api-key': api_key
+        'x-api-key': api_key,
+        'request_type': 'add'
     }
 
     msg = None
