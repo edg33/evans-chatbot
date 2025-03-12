@@ -99,7 +99,7 @@ def handle_request():
         by requesting their first and last name.',
         query= f"query: {message}",
         temperature=0.0,
-        lastk=5,
+        lastk=10,
         session_id=user+ f"_{ID_VAL}"
     )
     
