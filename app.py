@@ -29,11 +29,12 @@ def download_file(file_id, filename):
         headers = {
             "X-User-Id": ROCKET_USER_ID,
             "X-Auth-Token": ROCKET_AUTH_TOKEN
-        }
-
+        }   
+        print(f"DEBUG: Requesting file from {file_url}")
         response = requests.get(file_url, headers=headers, stream=True)
         if response.status_code == 200:
             local_path = os.path.join(UPLOAD_FOLDER, filename)
+            print(f"DEBUG: File {filename} successfully retrieved. Saving to {local_path}")
             with open(local_path, "wb") as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
@@ -45,11 +46,13 @@ def download_file(file_id, filename):
 def extract_text_from_file(file_path):
     """Extract text from different file types."""
     ext = file_path.split('.')[-1].lower()
+    print(f"DEBUG: Extracting text from {file_path} with extension {ext}")
     
     if ext == 'txt':
         with open(file_path, 'r', encoding='utf-8') as f:
             return f.read()
-    else:
+    else
+        print("ERROR: Unsupported file format for extraction.")
         return "Unsupported file format."
 
 def google_search(query):
@@ -94,6 +97,7 @@ def analyze_script_agentic(script_text, user_id):
     session_id = f"{user_id}_script_analysis"
     qa_session_id = f"{user_id}_script_qa"
     recommendation_session_id = f"{user_id}_script_recommendation"
+    print(f"DEBUG: Starting script analysis for user {user_id}")
     
     # First agent: Script analyzer that extracts key information
     analyzer_response = generate(
@@ -114,8 +118,10 @@ def analyze_script_agentic(script_text, user_id):
     )
     
     analysis = analyzer_response["response"]
+    print("DEBUG: Script analysis completed.")
     
     # Second agent: Generate questions and answers about the script
+    print("DEBUG: Generating questions based on analysis")
     qa_response = generate(
         model='4o-mini',
         system="""You are a music supervisor for films. Based on the script analysis provided, 
@@ -129,6 +135,7 @@ def analyze_script_agentic(script_text, user_id):
     )
     
     qa_pairs = qa_response["response"]
+    print("DEBUG: Questions generated successfully.")
     
     # Third agent: Generate song recommendations
     recommendation_response = generate(
@@ -146,6 +153,7 @@ def analyze_script_agentic(script_text, user_id):
         lastk=5,
         session_id=recommendation_session_id
     )
+    print("DEBUG: Song recommendations generated.")
     
     # Format final output to include the entire thought process
     final_output = f"""
@@ -182,12 +190,14 @@ def send_message_with_file(room_id, message, file_path):
 @app.route('/', methods=['POST'])
 def handle_request():
     data = request.get_json()
+    print(f"DEBUG: Received request data: {data}")
     
     # Validate data
     if not data:
         return jsonify({"error": "Invalid request format"}), 400
 
     # Extract relevant information
+    print(f"DEBUG: Processing request from user {user} (ID: {user_id})")
     user = data.get("user_name", "Unknown")
     user_id = data.get("user_id", f"user_{int(time.time())}")
     room_id = data.get("channel_id", "")
@@ -241,6 +251,7 @@ def handle_request():
                 
                 # Extract text from the file if it's a document type
                 ext = filename.split('.')[-1].lower()
+                print("DEBUG", ext)
                 if ext in ['txt', 'pdf', 'docx', 'doc']:
                     # Extract text from the file
                     script_text = extract_text_from_file(file_path)
@@ -251,12 +262,13 @@ def handle_request():
                         session_id=f"{user_id}_RAG",
                         strategy='fixed'
                     )
-                    
+                    print("DEBUG: Text upload")
                     time.sleep(10)  # Wait for indexing
                     
+                    print("DEBUG: Starting Analysis")
                     # Analyze the script using agentic approach
                     analysis_result = analyze_script_agentic(script_text, user_id)
-                    
+                    print("DEBUG: Finished Analysis")
                     # Extract songs from the analysis
                     song_extraction = generate(
                         model='4o-mini',
