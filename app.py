@@ -95,79 +95,61 @@ def rag_context_string(rag_context):
 def analyze_script_agentic(script_text, user_id):
     """Use an agentic workflow to analyze the script and recommend songs."""
     session_id = f"{user_id}_script_analysis"
-    qa_session_id = f"{user_id}_script_qa"
-    recommendation_session_id = f"{user_id}_script_recommendation"
+    
     print(f"DEBUG: Starting script analysis for user {user_id}")
     
-    # First agent: Script analyzer that extracts key information
+    # Make the first analysis call more focused and efficient
     analyzer_response = generate(
         model='4o-mini',
-        system="""You are an expert script analyzer. Your task is to examine the provided movie/scene script 
-        and extract key information that would be relevant for song selection, including:
-        1. Setting and time period
-        2. Mood and emotional tone
-        3. Character dynamics
-        4. Key themes or motifs
-        5. Pace and rhythm of the scene
-        6. Any specific musical cues mentioned
-        Format your analysis clearly and concisely, focusing on elements that would influence music selection.""",
-        query=f"Here is a script or scene description to analyze:\n\n{script_text}",
-        temperature=0.3,
-        lastk=5,
+        system="""You are an expert script analyzer for music selection. Extract ONLY the following key information:
+        1. Setting/time period (1-2 sentences)
+        2. Mood/tone (1-2 sentences)
+        3. Key themes (3-5 keywords)
+        4. Character dynamics (1-2 sentences)
+        5. Pace (fast/medium/slow)
+        Be extremely concise.""",
+        query=f"Here is a script to analyze for music selection:\n\n{script_text}",
+        temperature=0.2,
+        lastk=3,  # Reduced from 5
         session_id=session_id
     )
     
     analysis = analyzer_response["response"]
     print("DEBUG: Script analysis completed.")
+    print("DEBUG: Starting recommendation")
     
-    # Second agent: Generate questions and answers about the script
-    print("DEBUG: Generating questions based on analysis")
-    qa_response = generate(
-        model='4o-mini',
-        system="""You are a music supervisor for films. Based on the script analysis provided, 
-        generate 5 important questions you would normally ask a director about their musical preferences for this scene. 
-        Then, using just the script analysis, provide likely answers to those questions. 
-        Format as Question 1: [question] Answer: [answer], etc.""",
-        query=f"Based on this script analysis, generate key questions and their likely answers:\n\n{analysis}",
-        temperature=0.4,
-        lastk=5,
-        session_id=qa_session_id
-    )
-    
-    qa_pairs = qa_response["response"]
-    print("DEBUG: Questions generated successfully.")
-    
-    # Third agent: Generate song recommendations
+    # Skip the intermediate Q&A step and go directly to recommendations
     recommendation_response = generate(
         model='4o-mini',
-        system="""You are a professional music supervisor for films. Based on the script analysis and Q&A provided,
-        recommend 3-5 songs that would work well for this scene. For each song, provide:
+        system="""You are a professional music supervisor. Based on the script analysis, recommend 3-4 songs that would work well.
+        For each song, provide:
         1. Song title and artist
-        2. A brief explanation of why this song fits the scene
-        3. How the song's mood, tempo, and lyrics (if applicable) enhance the scene's emotional impact
+        2. Brief explanation (1-2 sentences) of why this song fits
         
-        Consider varied artists and styles to give options. Focus on providing songs that authentically enhance
-        the scene rather than just popular hits.""",
-        query=f"Based on this script analysis and Q&A, recommend appropriate songs for the scene:\n\nANALYSIS:\n{analysis}\n\nQ&A:\n{qa_pairs}",
-        temperature=0.7,
-        lastk=5,
-        session_id=recommendation_session_id
+        Format as:
+        1. Song - Artist
+           Explanation
+        
+        2. Song - Artist
+           Explanation
+        
+        Be concise and varied in your selections.""",
+        query=f"Based on this script analysis, recommend appropriate songs:\n\n{analysis}",
+        temperature=0.6,
+        lastk=3,  # Reduced from 5
+        session_id=f"{user_id}_script_recommendation"
     )
-    print("DEBUG: Song recommendations generated.")
+    print("DEBUG: Finished recommendation")
     
-    # Format final output to include the entire thought process
+    # Format final output in a more compact way
     final_output = f"""
                     Script Analysis:
                     {analysis}
-
-                    Questions and Answers I considered:
-                    {qa_pairs}
 
                     Song Recommendations:
                     {recommendation_response["response"]}
                     """
     print(final_output)
-    
     return final_output
 
 def send_message_with_file(room_id, message, file_path):
