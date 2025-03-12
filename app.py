@@ -44,7 +44,7 @@ def download_file(file_id, filename):
     return None
 
 def extract_text_from_file(file_path):
-    """Extract text from different file types."""
+    """Extract text from TXT files."""
     ext = file_path.split('.')[-1].lower()
     print(f"DEBUG: Extracting text from {file_path} with extension {ext}")
     
@@ -166,6 +166,7 @@ def analyze_script_agentic(script_text, user_id):
                     Song Recommendations:
                     {recommendation_response["response"]}
                     """
+    print(final_output)
     
     return final_output
 
@@ -226,6 +227,15 @@ def handle_request():
         return jsonify({"text": f"Here are some examples of how you could describe your scene:\n\n{examples_text}"})
     
     if message == "restart":
+        # Use this to fix the restart button
+        generate(
+            model='4o-mini',
+            system="This is a new conversation. Previous context has been cleared.",
+            query="Start fresh",
+            temperature=0.0,
+            lastk=0,
+            session_id=user
+        )
         return jsonify({
             "text": "Let's start over! Please describe the vibe of your movie scene or upload a script file."
         })
@@ -432,7 +442,7 @@ def handle_request():
         If you are providing song recommendations, ask who they want to share these recommendations with
         by requesting their first and last name.
         
-        If the user is asking to analyze a script, inform them they can upload a script file (PDF, TXT, or DOCX)
+        If the user is asking to analyze a script, inform them they can upload a script file (TXT)
         and you'll analyze it to recommend songs automatically."""
         
         response = generate(
