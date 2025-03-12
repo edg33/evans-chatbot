@@ -89,7 +89,9 @@ def handle_request():
         Do not provide more than 10 song recommendations. After they provide you answers \
         to your questions and if you are confident in your answer, provide the song and artist. \
         If you are not confident in your answer, ask more clarifying questions. After you provide songs \
-        ask if they like them or if they want to change something',
+        ask if they like them or if they want to change something. \
+        If you are providing song recommendations, ask who they want to share these recommendations with \
+        by requesting their first and last name.',
         query= f"query: {message}",
         temperature=0.0,
         lastk=5,
@@ -134,6 +136,23 @@ def handle_request():
     song_artists = extraction['response']
     song_artists = song_artists.split("///")
     
+    # Extract recipient name if present
+    recipient_extraction = generate(
+        model='4o-mini',
+        system=(
+            "You are helping extract recipient information. If the text contains a question about "
+            "who to share recommendations with and a response with a first and last name, extract "
+            "that name. If no name is found, respond with 'no recipient'."
+        ),
+        query=f"Extract recipient name from: {message}. If there's a first and last name mentioned as "
+              f"someone to share recommendations with, extract it. Otherwise respond with 'no recipient'.",
+        temperature=0.0,
+        lastk=0,
+        session_id=user + "_recipient"
+    )
+    
+    recipient = recipient_extraction['response']
+    
     # Boolean to keep track of things
     is_first = True
     
@@ -162,31 +181,43 @@ def handle_request():
                 else:
                     final_response += f"\n\n{song_artist}: (No link)"
                     message_items += f"\n\n{song_artist}: (No link)"
-        # Send the songs
-        # API endpoint
-        endpoint = "https://chat.genaiconnect.net/api/v1/chat.postMessage"
-        # Headers with authentication tokens
-        headers = {
-            "Content-Type": "application/json",
-            "X-Auth-Token": os.environ.get("RC_token"), #Replace with your bot token for local testing or keep it and store secrets in Koyeb
-            "X-User-Id": os.environ.get("RC_userId")#Replace with your bot user id for local testing or keep it and store secrets in Koyeb
-        }
-        # Payload (data to be sent)
-        payload = {
-            "channel": "@juliana.alscher", #Change this to your desired user, for any user it should start with @ then the username
-            "text": f"What do you think of these songs for your scene with {user}?\n\n" + message_items
-        }
         
-        # Sending the POST request
-        response = requests.post(endpoint, json=payload, headers=headers)
-        
-        # Print response status and content
-        print(response.status_code)
-        print(response.json()) 
-    
-    # Save the current question context to session or global variable
-    # (This is a simplified approach - in production you might use a database)
-    # For now, we'll just pass it through to the examples generator when needed
+        # Only send to Rocket Chat if recipient is provided
+        if recipient != "no recipient":
+            # Format recipient for Rocket Chat (convert to username format)
+            if " " in recipient:
+                firstname, lastname = recipient.split(" ", 1)
+                recipient_username = f"@{firstname.lower()}.{lastname.lower()}"
+            else:
+                # If only one name is provided, use it as is
+                recipient_username = f"@{recipient.lower()}"
+            
+            # API endpoint
+            endpoint = "https://chat.genaiconnect.net/api/v1/chat.postMessage"
+            # Headers with authentication tokens
+            headers = {
+                "Content-Type": "application/json",
+                "X-Auth-Token": os.environ.get("RC_token"),
+                "X-User-Id": os.environ.get("RC_userId")
+            }
+            # Payload (data to be sent)
+            payload = {
+                "channel": recipient_username,
+                "text": f"What do you think of these songs for your scene with {user}?\n\n" + message_items
+            }
+            
+            # Sending the POST request
+            response = requests.post(endpoint, json=payload, headers=headers)
+            
+            # Check if the message was sent successfully
+            if response.status_code == 200:
+                final_response += f"\n\nRecommendations sent to {recipient}!"
+            else:
+                final_response += f"\n\nCould not send recommendations to {recipient}. User may not exist in Rocket Chat."
+            
+            # Print response status and content
+            print(response.status_code)
+            print(response.json())
     
     # Add examples/restart buttons to the response
     response_with_buttons = {
@@ -214,7 +245,6 @@ def handle_request():
         ]
     }
     
-
     print(f"Final Response: {final_response}")
     return jsonify(response_with_buttons)
     
