@@ -51,7 +51,7 @@ def extract_text_from_file(file_path):
     if ext == 'txt':
         with open(file_path, 'r', encoding='utf-8') as f:
             return f.read()
-    else
+    else:
         print("ERROR: Unsupported file format for extraction.")
         return "Unsupported file format."
 
