@@ -352,9 +352,13 @@ def handle_request():
         temperature=0.0,
         lastk=0,
         session_id=f"{user}_recipient"
-    )
-    
+)
+
+# Check the type and format of the return value
+if isinstance(recipient_extraction, dict) and "response" in recipient_extraction:
     recipient = recipient_extraction["response"]
+else:
+    recipient = str(recipient_extraction)
     
     # Check if the user wants to use the RAG context (have they uploaded a script)
     use_rag = False
