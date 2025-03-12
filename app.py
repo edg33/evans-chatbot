@@ -317,20 +317,20 @@ def handle_request():
                     final_response += "Here are links to the recommended songs:\n\n"
                     final_response += "\n\n".join(song_links)
                     final_response += f"\n\n{share_question}"
-                    
+                    print(final_response)
                     return jsonify({
                         "text": final_response,
                         "attachments": [
                             {
                                 "text": "What would you like to do next?",
                                 "actions": [
-                                    {
-                                        "type": "button",
-                                        "text": "Get More Recommendations",
-                                        "msg": "analyze_script",
-                                        "msg_in_chat_window": True,
-                                        "msg_processing_type": "sendMessage"
-                                    },
+                                    # {
+                                    #     "type": "button",
+                                    #     "text": "Get More Recommendations",
+                                    #     "msg": "analyze_script",
+                                    #     "msg_in_chat_window": True,
+                                    #     "msg_processing_type": "sendMessage"
+                                    # },
                                     {
                                         "type": "button",
                                         "text": "Restart",
