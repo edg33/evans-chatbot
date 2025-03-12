@@ -5,6 +5,8 @@ import os
 
 app = Flask(__name__)
 
+ID_VAL = random.randint(1,100000)
+
 def google_search(query):
     """Queries Google Search API and returns the first result link."""
     search_url = "https://www.googleapis.com/customsearch/v1"
@@ -27,6 +29,7 @@ def google_search(query):
 
 @app.route('/', methods=['POST'])
 def handle_request():
+    global ID_VAL
     data = request.get_json() 
 
     # Extract relevant information
@@ -54,13 +57,14 @@ def handle_request():
                  f"and showcase various film genres and moods.",
             temperature=0.7,  # Higher temperature for more creative examples
             lastk=0,
-            session_id=examples_agent
+            session_id=examples_agent + f"_{ID_VAL}"
         )
         
         examples_text = examples_response["response"]
         return jsonify({"text": f"Here are some examples of how you could describe your scene:\n\n{examples_text}"})
     
     if message == "restart":
+        ID_VAL = random.randint(1,100000)
         # Clear session
         return jsonify({
             "text": "Let's start over! Please describe the vibe of your movie scene."
@@ -95,7 +99,7 @@ def handle_request():
         query= f"query: {message}",
         temperature=0.0,
         lastk=5,
-        session_id=user
+        session_id=user+ f"_{ID_VAL}"
     )
     
     recommendation_text = response["response"]
@@ -111,7 +115,7 @@ def handle_request():
         query=f"Extract the main question from this text: {recommendation_text}",
         temperature=0.0,
         lastk=0,
-        session_id=third_agent
+        session_id=third_agent+ f"_{ID_VAL}"
     )
     
     current_question = question_extraction['response']
@@ -130,7 +134,7 @@ def handle_request():
                 responses with \'///\'",
         temperature=0.0,
         lastk=0,
-        session_id=second_agent
+        session_id=second_agent+ f"_{ID_VAL}"
     )
 
     song_artists = extraction['response']
@@ -148,7 +152,7 @@ def handle_request():
               f"someone to share recommendations with, extract it. Otherwise respond with 'no recipient'.",
         temperature=0.0,
         lastk=0,
-        session_id=user + "_recipient"
+        session_id=user + "_recipient" + f"_{ID_VAL}"
     )
     
     recipient = recipient_extraction['response']
