@@ -85,15 +85,21 @@ def handle_request():
         politely remind the user of your purpose. If it appears the user \
         has an ambiguous prompt or a greeting, greet the user and explain \
         your purpose. The user will provide a vibe for a scene and you will \
-        help them determine what song to use. The questions should be straight to the point \
-        do not give examples of the answer uNLESS they ask. Ask questions related to the \
+        help them determine what song to use. \
+        You have 2 options:\
+        #Option 1#\
+        If you do not yet have a compelling song: \
+        Ask questions that should be straight to the point \
+        do not give examples of the answer unless they ask. Ask questions related to the \
         intended mood, lighting, length of scene etc, one by one so that the \
         user starts building an idea of what they want or have in mind.\
-        after they go through a series of questions, ask them if they have anything else \
-        they wat to add and if not, ask them how many songs they want \
-        Do not provide more than 10 song recommendations. After they provide you answers \
-        to your questions and if you are confident in your answer, provide the song and artist. \
-        If you are not confident in your answer, ask more clarifying questions. After you provide songs \
+        after they go through a series of questions not more than 5 questions, ask them if they have anything else \
+        they want to add and if not, ask them how many songs they want. \
+        Do not provide more than 10 song recommendations. \
+        #Option 2#\
+        Once you have sufficient answers to your questions to make a ecommendation \
+        and if you are confident in your answer, provide the song and artist. \
+        After you provide songs \
         ask if they like them or if they want to change something. \
         If you are providing song recommendations, ask who they want to share these recommendations with \
         by requesting their first and last name.',
@@ -127,12 +133,13 @@ def handle_request():
         system=(
             "You are helping a second agent. Extract only the song and artist from the provided text. \
              Remove everything that is not the key song and artist. \
-             If none are found, respond with 'no song'."
+             If none are found, respond only with '$$no song$$'."
         ),
         query=f"Extract song and artist from: {recommendation_text}.\
                 Remove everything that is not the a song and artist pair.\
                 If there are multiple song and artist pairs, separate the \
-                responses with \'///\'",
+                responses with \'///\'. If not songs are found, respond only\
+                with '$$no song$$'",
         temperature=0.0,
         lastk=0,
         session_id=second_agent+ f"_{ID_VAL}"
@@ -162,7 +169,7 @@ def handle_request():
     is_first = True
     
     # Search for URL only if a song is found
-    if "no song" in song_artists[0].lower():
+    if "$$no song$$" in song_artists[0].lower():
         final_response = f"{recommendation_text}"
     else:
         message_items = ""
