@@ -209,15 +209,33 @@ def handle_request():
         return jsonify({"text": f"Here are some examples of how you could describe your scene:\n\n{examples_text}"})
     
     if message == "restart":
-        # Use this to fix the restart button
-        generate(
-            model='4o-mini',
-            system="This is a new conversation. Previous context has been cleared.",
-            query="Start fresh",
-            temperature=0.0,
-            lastk=0,
-            session_id=user
-        )
+        # Reset all session contexts associated with this user
+        session_ids = [
+            user,  # Main conversation session
+            f"{user}_examples",
+            f"{user_id}_RAG",
+            f"{user_id}_script_analysis",
+            f"{user_id}_script_recommendation",
+            f"{user_id}_extractor",
+            f"{user}_recipient",
+            f"{user}_song_extractor"
+        ]
+        
+        # Reset each session
+        for session_id in session_ids:
+            try:
+                generate(
+                    model='4o-mini',
+                    system="This is a new conversation. Previous context has been cleared.",
+                    query="Reset all context",
+                    temperature=0.0,
+                    lastk=0,
+                    session_id=session_id
+                )
+                print(f"DEBUG: Reset session {session_id}")
+            except Exception as e:
+                print(f"Error resetting session {session_id}: {e}")
+            
         return jsonify({
             "text": "Let's start over! Please describe the vibe of your movie scene or upload a script file."
         })
