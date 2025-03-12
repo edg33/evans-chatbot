@@ -286,6 +286,7 @@ def handle_request():
                     # Analyze the script using agentic approach
                     analysis_result = analyze_script_agentic(script_text, user_id)
                     print("DEBUG: Finished Analysis")
+                    print("DEBUG: Start Extraction")
                     # Extract songs from the analysis
                     song_extraction = generate(
                         model='4o-mini',
@@ -295,9 +296,10 @@ def handle_request():
                         lastk=0,
                         session_id=f"{user_id}_extractor_{ID_VAL}"
                     )
+                    print("DEBUG: Finish extraction")
                     
                     songs = song_extraction["response"].split("///")
-                    
+                    print("DEBUG:", songs)
                     # Add links to songs
                     song_links = []
                     for song in songs:
