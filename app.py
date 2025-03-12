@@ -4,6 +4,7 @@ import time
 from flask import Flask, request, jsonify, abort
 from llmproxy import generate, retrieve, text_upload
 from string import Template
+import random
 
 app = Flask(__name__)
 
@@ -11,6 +12,9 @@ app = Flask(__name__)
 ROCKET_CHAT_URL = "https://chat.genaiconnect.net"
 ROCKET_USER_ID = os.environ.get("RC_userId")
 ROCKET_AUTH_TOKEN = os.environ.get("RC_token")
+
+ID_VAL = random.randint(1,100000)
+
 
 # File handling
 UPLOAD_FOLDER = "uploads"
@@ -94,7 +98,7 @@ def rag_context_string(rag_context):
 
 def analyze_script_agentic(script_text, user_id):
     """Use an agentic workflow to analyze the script and recommend songs."""
-    session_id = f"{user_id}_script_analysis"
+    session_id = f"{user_id}_script_analysis_{ID_VAL}"
     
     print(f"DEBUG: Starting script analysis for user {user_id}")
     
@@ -137,7 +141,7 @@ def analyze_script_agentic(script_text, user_id):
         query=f"Based on this script analysis, recommend appropriate songs:\n\n{analysis}",
         temperature=0.6,
         lastk=3,  # Reduced from 5
-        session_id=f"{user_id}_script_recommendation"
+        session_id=f"{user_id}_script_recommendation_{ID_VAL}"
     )
     print("DEBUG: Finished recommendation")
     
@@ -202,23 +206,24 @@ def handle_request():
                  "Generate 3-4 examples of possible answers to the question being posed and showcase various film genres and moods.",
             temperature=0.7,
             lastk=0,
-            session_id=f"{user}_examples"
+            session_id=f"{user}_examples_{ID_VAL}"
         )
         
         examples_text = examples_response["response"]
         return jsonify({"text": f"Here are some examples of how you could describe your scene:\n\n{examples_text}"})
     
     if message == "restart":
+        ID_VAL = random.randint(1,100000)
         # Reset all session contexts associated with this user
         session_ids = [
             user,  # Main conversation session
-            f"{user}_examples",
-            f"{user_id}_RAG",
-            f"{user_id}_script_analysis",
-            f"{user_id}_script_recommendation",
-            f"{user_id}_extractor",
-            f"{user}_recipient",
-            f"{user}_song_extractor"
+            f"{user}_examples_{ID_VAL}",
+            f"{user_id}_RAG_{ID_VAL}",
+            f"{user_id}_script_analysis_{ID_VAL}",
+            f"{user_id}_script_recommendation_{ID_VAL}",
+            f"{user_id}_extractor_{ID_VAL}",
+            f"{user}_recipient_{ID_VAL}",
+            f"{user}_song_extractor_{ID_VAL}"
         ]
         
         # Reset each session
@@ -270,7 +275,7 @@ def handle_request():
                     # Upload the script text to RAG
                     rag_response = text_upload(
                         text=script_text,
-                        session_id=f"{user_id}_RAG",
+                        session_id=f"{user_id}_RAG_{ID_VAL}",
                         strategy='fixed'
                     )
                     print("DEBUG: Text upload")
@@ -287,7 +292,7 @@ def handle_request():
                         query=f"Extract songs from: {analysis_result}",
                         temperature=0.0,
                         lastk=0,
-                        session_id=f"{user_id}_extractor"
+                        session_id=f"{user_id}_extractor_{ID_VAL}"
                     )
                     
                     songs = song_extraction["response"].split("///")
@@ -374,7 +379,7 @@ def handle_request():
               f"someone to share recommendations with, extract it. Otherwise respond with 'no recipient'.",
         temperature=0.0,
         lastk=0,
-        session_id=f"{user}_recipient"
+        session_id=f"{user}_recipient_{ID_VAL}"
         )
 
     # Check the type and format of the return value
@@ -388,7 +393,7 @@ def handle_request():
     try:
         rag_context = retrieve(
             query=message,
-            session_id=f"{user_id}_RAG",
+            session_id=f"{user_id}_RAG_{ID_VAL}",
             rag_threshold=0.2,
             rag_k=3
         )
@@ -423,7 +428,7 @@ def handle_request():
             query=query_with_context,
             temperature=0.0,
             lastk=5,
-            session_id=user
+            session_id=user + f"_{ID_VAL}"
         )
     else:
         # Standard response without RAG
@@ -451,7 +456,7 @@ def handle_request():
             query=message,
             temperature=0.0,
             lastk=5,
-            session_id=user
+            session_id=user + f"_{ID_VAL}"
         )
     
     recommendation_text = response["response"]
@@ -470,7 +475,7 @@ def handle_request():
               f"responses with '///'",
         temperature=0.0,
         lastk=0,
-        session_id=f"{user}_song_extractor"
+        session_id=f"{user}_song_extractor_{ID_VAL}"
     )
 
     song_artists = song_extraction["response"].split("///")
