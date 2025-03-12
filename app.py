@@ -197,11 +197,12 @@ def handle_request():
         return jsonify({"error": "Invalid request format"}), 400
 
     # Extract relevant information
-    print(f"DEBUG: Processing request from user {user} (ID: {user_id})")
+    
     user = data.get("user_name", "Unknown")
     user_id = data.get("user_id", f"user_{int(time.time())}")
     room_id = data.get("channel_id", "")
     message = data.get("text", "")
+    print(f"DEBUG: Processing request from user {user} (ID: {user_id})")
 
     print(f"Received data: {data}")
 
