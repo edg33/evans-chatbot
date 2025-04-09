@@ -62,7 +62,7 @@ def handle_request():
     # Check if this is an algorithm-related query
     keyword_check = generate(
         model="4o-mini",
-        system="Identify whether this question is about a computer science algorithm or concept. Respond with 'yes' or 'no'.",
+        system="Identify whether this question is about a specific computer science algorithm or concept. Respond with 'yes' or 'no'.",
         query=message,
         temperature=0.0,
         lastk=0,
