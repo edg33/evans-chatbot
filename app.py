@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify
 from llmproxy import generate, pdf_upload, text_upload, retrieve
 from string import Template
 
-# Rocket.Chat settings
+# Rocket.Chat credentials
 ROCKET_CHAT_URL = os.environ.get("RC_URL", "https://chat.genaiconnect.net")
 ROCKET_USER_ID = os.environ.get("RCuser")
 ROCKET_AUTH_TOKEN = os.environ.get("RCtoken")
@@ -33,37 +33,15 @@ def download_file(file_id, filename):
                 for chunk in response.iter_content(8192):
                     f.write(chunk)
             return local_path
-    print(f"Download error {filename} - {response.status_code}")
     return None
 
-def rag_context_string_simple(rag_context):
-    context_string = ""
-    i = 1
-    for collection in rag_context:
-        if not context_string:
-            context_string = "Here is some context from your uploaded files:\n"
-        context_string += f"\n#{i} {collection['doc_summary']}\n"
-        for j, chunk in enumerate(collection['chunks'], start=1):
-            context_string += f"#{i}.{j} {chunk}\n"
-        i += 1
-    return context_string
-
-def google_search(query, site_filter="youtube.com"):
-    """Queries Google Search API and returns the first YouTube result link."""
-    search_url = "https://www.googleapis.com/customsearch/v1"
-    params = {
-        "key": os.environ.get("GOOGLE_API_KEY"),
-        "cx": os.environ.get("GOOGLE_CSE_ID"),
-        "q": f"{query} site:{site_filter}",
-        "num": 1
-    }
-    response = requests.get(search_url, params=params)
-    if response.status_code == 200:
-        results = response.json().get("items", [])
-        if results:
-            return results[0]["link"]
-    print(f"Search error: {response.status_code}, {response.text}")
-    return None
+def rag_context_string(rag_context):
+    context = ""
+    for i, doc in enumerate(rag_context, 1):
+        context += f"\n#{i}: {doc['doc_summary']}\n"
+        for j, chunk in enumerate(doc['chunks'], 1):
+            context += f"- {chunk}\n"
+    return context
 
 @app.route("/", methods=["POST"])
 def handle_request():
@@ -72,106 +50,42 @@ def handle_request():
     message = data.get("text", "")
     room_id = data.get("channel_id", "")
 
-    # Ignore bot messages
-    if data.get("bot") or (not message and "files" not in data.get("message", {})):
-        return jsonify({"status": "ignored"})
-
-    # Handle file uploads
+    # Handle file upload
     if "files" in data.get("message", {}):
-        saved_files = []
         for file_info in data["message"]["files"]:
             file_id = file_info["_id"]
             filename = file_info["name"]
             local_path = download_file(file_id, filename)
             if local_path:
-                # Upload to LLMProxy
                 if filename.endswith(".pdf"):
                     pdf_upload(path=local_path, session_id=user, strategy="smart")
                 elif filename.endswith(".txt"):
                     with open(local_path, "r") as f:
                         text_upload(text=f.read(), session_id=user, strategy="smart")
-                saved_files.append(filename)
+        return jsonify({"text": "✅ File uploaded. What would you like to ask about it?"})
 
-        file_list = "\n".join(f"- {f}" for f in saved_files)
-        return jsonify({
-            "text": f"✅ File(s) uploaded successfully:\n{file_list}\n\nWhat would you like help with in the file?"
-        })
+    # Handle question
+    if message and not data.get("bot"):
+        rag_context = retrieve(query=message, session_id=user, rag_threshold=0.2, rag_k=3)
+        full_query = Template("$query\n\n$rag").substitute(
+            query=message,
+            rag=rag_context_string(rag_context)
+        )
+        response = generate(
+            model="4o-mini",
+            system="You are a helpful teaching assistant. Use the context to help answer the question.",
+            query=full_query,
+            temperature=0.3,
+            lastk=0,
+            session_id=user,
+            rag_usage=False
+        )
+        return jsonify({"text": response["response"]})
 
-    # Otherwise, handle normal user query
-    # Retrieve RAG context (if any files uploaded before)
-    rag_context = retrieve(query=message, session_id=user, rag_threshold=0.2, rag_k=3)
-    context_str = rag_context_string_simple(rag_context)
-
-    full_prompt = Template("$query\n\n$rag_context").substitute(
-        query=message,
-        rag_context=context_str
-    )
-
-    # Generate thoughtful TA response
-    ta_response = generate(
-        model="4o-mini",
-        system=(
-            "You are a helpful TA for an algorithms and data structures class. "
-            "Use uploaded content to help the student, but don't just give away answers. "
-            "Ask clarifying or guiding questions. Include video resources if the query is algorithm-related."
-        ),
-        query=full_prompt,
-        temperature=0.4,
-        lastk=5,
-        session_id=user,
-        rag_usage=False
-    )
-
-    answer = ta_response["response"]
-
-    # Check if it’s an algorithm question and attach video if so
-    alg_check = generate(
-        model="4o-mini",
-        system="Is this about an algorithm or data structure? Reply 'yes' or 'no'.",
-        query=message,
-        temperature=0.0,
-        lastk=0,
-        session_id=user + "_alg_check"
-    )
-    if alg_check["response"].strip().lower() == "yes":
-        link = google_search(message)
-        if link:
-            answer += f"\n\n🔗 You might also find this helpful: {link}"
-
-    return jsonify({
-        "text": answer,
-        "attachments": [
-            {
-                "text": "What would you like to do next?",
-                "actions": [
-                    {
-                        "type": "button",
-                        "text": "Try another explanation",
-                        "msg": "explain again",
-                        "msg_in_chat_window": True,
-                        "msg_processing_type": "sendMessage"
-                    },
-                    {
-                        "type": "button",
-                        "text": "Show me examples",
-                        "msg": "examples",
-                        "msg_in_chat_window": True,
-                        "msg_processing_type": "sendMessage"
-                    },
-                    {
-                        "type": "button",
-                        "text": "Restart",
-                        "msg": "restart",
-                        "msg_in_chat_window": True,
-                        "msg_processing_type": "sendMessage"
-                    }
-                ]
-            }
-        ]
-    })
+    return jsonify({"status": "ignored"})
 
 @app.errorhandler(404)
-def page_not_found(e):
+def not_found(e):
     return "Not Found", 404
 
 if __name__ == "__main__":
