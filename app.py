@@ -71,16 +71,17 @@ def handle_request():
             query=message,
             rag=rag_context_string(rag_context)
         )
-        response = generate(
-            model="4o-mini",
-            system="You are a helpful teaching assistant. Use the context to help answer the question.",
-            query=full_query,
-            temperature=0.3,
-            lastk=0,
-            session_id=user,
-            rag_usage=False
-        )
-        return jsonify({"text": response["response"]})
+        return jsonify({"text": rag_context})
+        # response = generate(
+        #     model="4o-mini",
+        #     system="You are a helpful teaching assistant. Use the context to help answer the question.",
+        #     query=full_query,
+        #     temperature=0.3,
+        #     lastk=0,
+        #     session_id=user,
+        #     rag_usage=False
+        # )
+        # return jsonify({"text": response["response"]})
 
     return jsonify({"status": "ignored"})
 
