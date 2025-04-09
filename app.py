@@ -1,92 +1,152 @@
+import os
 import requests
 from flask import Flask, request, jsonify
-from llmproxy import generate
-import os
+from llmproxy import generate, pdf_upload, text_upload, retrieve
+from string import Template
+
+# Rocket.Chat settings
+ROCKET_CHAT_URL = os.environ.get("RC_URL", "https://chat.genaiconnect.net")
+ROCKET_USER_ID = os.environ.get("RCuser")
+ROCKET_AUTH_TOKEN = os.environ.get("RCtoken")
+
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+ALLOWED_EXTENSIONS = {'txt', 'pdf'}
 
 app = Flask(__name__)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def download_file(file_id, filename):
+    """Download file from Rocket.Chat and save locally."""
+    if allowed_file(filename):
+        file_url = f"{ROCKET_CHAT_URL}/file-upload/{file_id}/{filename}"
+        headers = {
+            "X-User-Id": ROCKET_USER_ID,
+            "X-Auth-Token": ROCKET_AUTH_TOKEN
+        }
+        response = requests.get(file_url, headers=headers, stream=True)
+        if response.status_code == 200:
+            local_path = os.path.join(UPLOAD_FOLDER, filename)
+            with open(local_path, "wb") as f:
+                for chunk in response.iter_content(8192):
+                    f.write(chunk)
+            return local_path
+    print(f"Download error {filename} - {response.status_code}")
+    return None
+
+def rag_context_string_simple(rag_context):
+    context_string = ""
+    i = 1
+    for collection in rag_context:
+        if not context_string:
+            context_string = "Here is some context from your uploaded files:\n"
+        context_string += f"\n#{i} {collection['doc_summary']}\n"
+        for j, chunk in enumerate(collection['chunks'], start=1):
+            context_string += f"#{i}.{j} {chunk}\n"
+        i += 1
+    return context_string
 
 def google_search(query, site_filter="youtube.com"):
     """Queries Google Search API and returns the first YouTube result link."""
     search_url = "https://www.googleapis.com/customsearch/v1"
-    
     params = {
         "key": os.environ.get("GOOGLE_API_KEY"),
         "cx": os.environ.get("GOOGLE_CSE_ID"),
-        "q": query,
+        "q": f"{query} site:{site_filter}",
         "num": 1
     }
-    
-    if site_filter:
-        params["q"] += f" site:{site_filter}"
-    
     response = requests.get(search_url, params=params)
-    
     if response.status_code == 200:
-        search_results = response.json().get("items", [])
-        if search_results:
-            return search_results[0]["link"]
-    print(f"Error: {response.status_code}, {response.text}")
+        results = response.json().get("items", [])
+        if results:
+            return results[0]["link"]
+    print(f"Search error: {response.status_code}, {response.text}")
     return None
 
-@app.route('/', methods=['POST'])
+@app.route("/", methods=["POST"])
 def handle_request():
     data = request.get_json()
     user = data.get("user_name", "Unknown")
     message = data.get("text", "")
+    room_id = data.get("channel_id", "")
 
     # Ignore bot messages
-    if data.get("bot") or not message:
+    if data.get("bot") or (not message and "files" not in data.get("message", {})):
         return jsonify({"status": "ignored"})
 
-    print(f"Message from {user}: {message}")
+    # Handle file uploads
+    if "files" in data.get("message", {}):
+        saved_files = []
+        for file_info in data["message"]["files"]:
+            file_id = file_info["_id"]
+            filename = file_info["name"]
+            local_path = download_file(file_id, filename)
+            if local_path:
+                # Upload to LLMProxy
+                if filename.endswith(".pdf"):
+                    pdf_upload(path=local_path, session_id=user, strategy="smart")
+                elif filename.endswith(".txt"):
+                    with open(local_path, "r") as f:
+                        text_upload(text=f.read(), session_id=user, strategy="smart")
+                saved_files.append(filename)
 
-    # Socratic TA Agent — gently guides
-    response = generate(
-        model='4o-mini',
-        system=(
-            "You are a helpful teaching assistant in a university class. "
-            "Your goal is to guide students to discover answers on their own rather than providing direct answers. "
-            "Ask follow-up questions that help them think critically. "
-            "If the student asks about an algorithm or programming concept, check if they need further resources, "
-            "such as a YouTube video tutorial. Be encouraging and supportive, and never dismissive."
-        ),
-        query=f"{message}",
-        temperature=0.5,
-        lastk=5,
-        session_id=user
+        file_list = "\n".join(f"- {f}" for f in saved_files)
+        return jsonify({
+            "text": f"✅ File(s) uploaded successfully:\n{file_list}\n\nWhat would you like help with in the file?"
+        })
+
+    # Otherwise, handle normal user query
+    # Retrieve RAG context (if any files uploaded before)
+    rag_context = retrieve(query=message, session_id=user, rag_threshold=0.2, rag_k=3)
+    context_str = rag_context_string_simple(rag_context)
+
+    full_prompt = Template("$query\n\n$rag_context").substitute(
+        query=message,
+        rag_context=context_str
     )
 
-    ta_reply = response["response"]
-
-    # Check if this is an algorithm-related query
-    keyword_check = generate(
+    # Generate thoughtful TA response
+    ta_response = generate(
         model="4o-mini",
-        system="Identify whether this question is about a computer science algorithm or concept. Respond with 'yes' or 'no'.",
+        system=(
+            "You are a helpful TA for an algorithms and data structures class. "
+            "Use uploaded content to help the student, but don't just give away answers. "
+            "Ask clarifying or guiding questions. Include video resources if the query is algorithm-related."
+        ),
+        query=full_prompt,
+        temperature=0.4,
+        lastk=5,
+        session_id=user,
+        rag_usage=False
+    )
+
+    answer = ta_response["response"]
+
+    # Check if it’s an algorithm question and attach video if so
+    alg_check = generate(
+        model="4o-mini",
+        system="Is this about an algorithm or data structure? Reply 'yes' or 'no'.",
         query=message,
         temperature=0.0,
         lastk=0,
         session_id=user + "_alg_check"
     )
+    if alg_check["response"].strip().lower() == "yes":
+        link = google_search(message)
+        if link:
+            answer += f"\n\n🔗 You might also find this helpful: {link}"
 
-    is_algorithm = keyword_check["response"].strip().lower() == "yes"
-
-    final_text = ta_reply
-
-    if is_algorithm:
-        video_link = google_search(message, site_filter="youtube.com")
-        if video_link:
-            final_text += f"\n\nYou might find this helpful: {video_link}"
-
-    # Add response buttons
-    response_with_buttons = {
-        "text": final_text,
+    return jsonify({
+        "text": answer,
         "attachments": [
             {
-                "text": "Need more help?",
+                "text": "What would you like to do next?",
                 "actions": [
                     {
                         "type": "button",
-                        "text": "Try a different explanation",
+                        "text": "Try another explanation",
                         "msg": "explain again",
                         "msg_in_chat_window": True,
                         "msg_processing_type": "sendMessage"
@@ -108,9 +168,7 @@ def handle_request():
                 ]
             }
         ]
-    }
-
-    return jsonify(response_with_buttons)
+    })
 
 @app.errorhandler(404)
 def page_not_found(e):
